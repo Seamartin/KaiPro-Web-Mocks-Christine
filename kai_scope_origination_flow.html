@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kai — Scope Origination Flow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Hanken+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --white:#FFFFFF;
+  --app-bg:#FFFDF8;
+  --stroke:#DDD6C8;
+  --midtone:#7D7469;
+  --ink:#1A1A1A;
+  --accent:#FDFF86;
+  --error:#C0443A;
+  --success:#4A8C5C;
+  --wash:#FDFDEA;
+  --display:'Maxeville','Space Grotesk',sans-serif;
+  --body:'Circular XX','Hanken Grotesk','Helvetica Neue',sans-serif;
+  --mono:'Maxeville Construct','Space Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--app-bg);color:var(--ink);
+  font-family:var(--body);font-size:14px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+  min-height:100vh;display:flex;align-items:center;justify-content:center;
+  background-image:linear-gradient(var(--stroke) 1px,transparent 1px),linear-gradient(90deg,var(--stroke) 1px,transparent 1px);
+  background-size:24px 24px;background-color:#EDE9DF;
+}
+.eyebrow{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+
+/* trigger for demo */
+.launch{
+  background:var(--accent);color:var(--ink);border:none;
+  font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  padding:14px 28px;cursor:pointer;
+}
+
+/* ---- overlay ---- */
+.overlay{position:fixed;inset:0;background:rgba(26,26,26,.55);display:none;align-items:center;justify-content:center;padding:24px;z-index:100}
+.overlay.show{display:flex}
+
+/* ===== UPLOAD MODAL ===== */
+.modal-upload{width:100%;max-width:560px;background:var(--white);border:1px solid var(--ink);position:relative}
+.mu-close{position:absolute;top:20px;right:20px;background:none;border:none;cursor:pointer;padding:6px;z-index:2}
+.mu-close svg{width:18px;height:18px;stroke:var(--midtone);stroke-width:1.6;fill:none;display:block}
+.mu-close:hover svg{stroke:var(--ink)}
+.mu-head{padding:24px 28px 0}
+.mu-head .eyebrow{color:var(--accent);background:var(--ink);display:inline-block;padding:5px 9px;letter-spacing:.14em}
+.mu-head h2{font-family:var(--display);font-size:22px;font-weight:700;letter-spacing:-.01em;margin-top:16px;padding-right:28px}
+.mu-head p{color:var(--midtone);font-size:13.5px;margin-top:8px}
+.mu-body{padding:22px 28px 0}
+
+.dropzone{
+  border:1.5px dashed var(--stroke);background:var(--app-bg);
+  padding:40px 24px;text-align:center;cursor:pointer;transition:.15s;
+}
+.dropzone.drag{border-color:var(--ink);background:var(--wash)}
+.dropzone .dz-icon{width:40px;height:40px;stroke:var(--midtone);stroke-width:1.4;fill:none;margin:0 auto 16px;display:block}
+.dropzone.drag .dz-icon{stroke:var(--ink)}
+.dropzone .dz-title{font-family:var(--display);font-size:16px;font-weight:700}
+.dropzone .dz-sub{color:var(--midtone);font-size:13px;margin-top:6px}
+.dropzone .dz-browse{color:var(--ink);font-weight:700;text-decoration:underline;text-underline-offset:3px}
+.dz-meta{font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--midtone);text-transform:uppercase;margin-top:16px}
+
+/* selected file row */
+.filerow{display:none;border:1px solid var(--ink);background:var(--app-bg);margin-top:16px}
+.filerow.show{display:block}
+.fr-top{display:flex;align-items:center;gap:14px;padding:16px 18px}
+.fr-thumb{width:48px;height:48px;background:var(--ink);flex:0 0 auto;display:flex;align-items:center;justify-content:center}
+.fr-thumb svg{width:22px;height:22px;stroke:var(--accent);stroke-width:1.5;fill:none}
+.fr-info{flex:1;min-width:0}
+.fr-name{font-family:var(--display);font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fr-sub{font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--midtone);text-transform:uppercase;margin-top:3px}
+.fr-x{background:none;border:none;cursor:pointer;padding:6px;flex:0 0 auto}
+.fr-x svg{width:16px;height:16px;stroke:var(--midtone);stroke-width:1.6;fill:none}
+.fr-x:hover svg{stroke:var(--error)}
+.fr-bar{height:3px;background:var(--stroke);overflow:hidden}
+.fr-bar i{display:block;height:100%;width:0;background:var(--success);transition:width .3s linear}
+
+.mu-foot{display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:12px 28px 26px;margin-top:10px}
+.mu-hint{font-family:var(--mono);font-size:10px;letter-spacing:.05em;color:var(--midtone);text-transform:uppercase}
+.btn-row{display:flex;gap:10px}
+.btn{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:13px 22px;cursor:pointer;border:1px solid var(--ink);background:var(--white);color:var(--ink)}
+.btn.ghost{border-color:var(--stroke);color:var(--midtone)}
+.btn.primary{background:var(--ink);border-color:var(--ink);color:var(--white)}
+.btn.primary:disabled{background:var(--stroke);border-color:var(--stroke);color:var(--midtone);cursor:not-allowed}
+
+/* ===== CONFIRM MODAL ===== */
+.modal-confirm{width:100%;max-width:600px;background:var(--white);border:1px solid var(--ink)}
+.mc-hero{background:var(--ink);color:var(--white);padding:30px 40px 34px}
+.mc-hero .eyebrow{color:var(--accent)}
+.mc-hero h2{font-family:var(--display);font-size:30px;font-weight:700;line-height:1.12;letter-spacing:-.015em;margin-top:16px}
+.mc-hero p{color:#B8B2A6;font-size:14.5px;margin-top:14px;max-width:52ch}
+.mc-body{padding:26px 40px 36px}
+.mc-cap{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--midtone)}
+.stats{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--stroke);margin-top:14px}
+.stat{padding:20px 22px}
+.stat:first-child{border-right:1px solid var(--stroke)}
+.stat svg{width:22px;height:22px;stroke:var(--ink);stroke-width:1.5;fill:none;display:block}
+.stat .val{font-family:var(--display);font-size:30px;font-weight:700;margin-top:14px;line-height:1}
+.stat .lab{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--midtone);margin-top:8px}
+.capby{font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--midtone);margin-top:16px}
+
+.callout{display:flex;gap:14px;margin-top:26px}
+.callout .check{width:26px;height:26px;background:var(--success);flex:0 0 auto;display:flex;align-items:center;justify-content:center}
+.callout .check svg{width:15px;height:15px;stroke:var(--white);stroke-width:2.4;fill:none}
+.callout p{font-size:14.5px;line-height:1.55}
+.callout p b{font-weight:700}
+
+.mc-cta{
+  width:100%;background:var(--ink);color:var(--white);border:none;
+  font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  padding:20px;cursor:pointer;margin-top:26px;display:flex;align-items:center;justify-content:center;gap:12px;
+}
+.mc-note{font-family:var(--mono);font-size:10px;letter-spacing:.05em;color:var(--midtone);text-transform:uppercase;text-align:center;margin-top:18px;line-height:1.7}
+
+/* ===== ANALYZING MODAL ===== */
+.modal-analyze{width:100%;max-width:560px;background:var(--ink);color:var(--white);border:1px solid var(--ink);padding:48px 44px 40px;text-align:center}
+.ma-eyebrow{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.ma-title{font-family:var(--display);font-size:24px;font-weight:700;letter-spacing:-.01em;margin-top:14px}
+
+/* build glyph */
+.ma-stage{margin:34px auto 30px;width:64px;height:64px;position:relative}
+.ma-stage svg{width:64px;height:64px;stroke:#4a463e;stroke-width:1.4;fill:none;position:absolute;inset:0;opacity:0;transition:opacity .5s}
+.ma-stage svg.on{opacity:1;stroke:var(--accent)}
+
+/* rotating status line */
+.ma-status{font-family:var(--display);font-size:17px;font-weight:700;min-height:24px;transition:opacity .3s}
+.ma-sub{font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:#B8B2A6;text-transform:uppercase;margin-top:10px}
+
+/* progress bar */
+.ma-track{height:4px;background:#332f28;margin-top:30px;overflow:hidden}
+.ma-track i{display:block;height:100%;width:0;background:var(--accent);transition:width .6s linear}
+.ma-pct{font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:#8a857b;text-transform:uppercase;margin-top:14px;display:flex;justify-content:space-between}
+
+/* checklist of completed phases */
+.ma-log{text-align:left;margin-top:28px;border-top:1px solid #332f28;padding-top:20px;display:flex;flex-direction:column;gap:11px}
+.ma-log-row{display:flex;align-items:center;gap:12px;font-size:13px;color:#5f5b52;transition:color .3s}
+.ma-log-row.done{color:var(--white)}
+.ma-log-row .lchk{width:18px;height:18px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;border:1px solid #4a463e}
+.ma-log-row.done .lchk{background:var(--success);border-color:var(--success)}
+.ma-log-row .lchk svg{width:11px;height:11px;stroke:var(--white);stroke-width:2.6;fill:none;opacity:0}
+.ma-log-row.done .lchk svg{opacity:1}
+.ma-log-row.active .lchk{border-color:var(--accent)}
+.ma-log-row.active{color:var(--white)}
+</style>
+</head>
+<body>
+
+<button class="launch" onclick="openUpload()">Open upload flow →</button>
+
+<!-- ===== STEP 1: UPLOAD ===== -->
+<div class="overlay" id="ovUpload">
+  <div class="modal-upload" role="dialog" aria-modal="true">
+    <button class="mu-close" onclick="closeAll()" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <div class="mu-head">
+      <span class="eyebrow">Scope Origination · 3484 South Main St</span>
+      <h2>Upload the walkthrough video</h2>
+      <p>Add your walkthrough video. Kai will analyze the footage and extract photos to draft a scope for your review.</p>
+    </div>
+    <div class="mu-body">
+      <div class="dropzone" id="dz" onclick="picker.click()">
+        <svg class="dz-icon" viewBox="0 0 24 24"><path d="M12 16V4M12 4l-5 5M12 4l5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+        <div class="dz-title">Drag &amp; drop your video</div>
+        <div class="dz-sub">or <span class="dz-browse">browse files</span> to upload</div>
+        <div class="dz-meta">MP4 · MOV · up to 4 GB · one video per capture</div>
+      </div>
+      <input type="file" id="picker" accept="video/*" hidden>
+
+      <div class="filerow" id="filerow">
+        <div class="fr-top">
+          <div class="fr-thumb"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="14" height="14"/><path d="M16 9l6-3v12l-6-3"/></svg></div>
+          <div class="fr-info">
+            <div class="fr-name" id="frName">walkthrough.mp4</div>
+            <div class="fr-sub" id="frSub">Uploading…</div>
+          </div>
+          <button class="fr-x" onclick="clearFile(event)" aria-label="Remove"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        </div>
+        <div class="fr-bar"><i id="frBar"></i></div>
+      </div>
+    </div>
+    <div class="mu-foot">
+      <div class="btn-row">
+        <button class="btn ghost" onclick="closeAll()">Cancel</button>
+        <button class="btn primary" id="analyzeBtn" disabled onclick="runAnalyze()">Analyze with Kai →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== STEP 2: ANALYZING ===== -->
+<div class="overlay" id="ovAnalyze">
+  <div class="modal-analyze" role="dialog" aria-modal="true">
+    <div class="ma-eyebrow">Kai is on site · 3484 South Main St</div>
+    <div class="ma-title">Drafting your scope</div>
+
+    <div class="ma-stage" id="maStage">
+      <svg data-s="0" viewBox="0 0 24 24"><path d="M3 21h18M5 21V8l7-4 7 4v13M9 21v-6h6v6"/></svg>
+      <svg data-s="1" viewBox="0 0 24 24"><path d="M4 20V6M12 20V4M20 20V9M2 20h20"/></svg>
+      <svg data-s="2" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18M7 3v18M17 3v18"/></svg>
+      <svg data-s="3" viewBox="0 0 24 24"><path d="M4 20l7-7M11 13l-2-2 8-8 2 2-8 8M17 5l2 2"/></svg>
+      <svg data-s="4" viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg>
+    </div>
+
+    <div class="ma-status" id="maStatus">Walking the property</div>
+    <div class="ma-sub" id="maSub">Reviewing footage frame by frame</div>
+
+    <div class="ma-track"><i id="maBar"></i></div>
+    <div class="ma-pct"><span id="maPct">0%</span><span>Est. a few minutes</span></div>
+
+    <div class="ma-log" id="maLog">
+      <div class="ma-log-row" data-p="0"><span class="lchk"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg></span><span>Walking the property</span></div>
+      <div class="ma-log-row" data-p="1"><span class="lchk"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg></span><span>Framing the rooms</span></div>
+      <div class="ma-log-row" data-p="2"><span class="lchk"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg></span><span>Checking the systems</span></div>
+      <div class="ma-log-row" data-p="3"><span class="lchk"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg></span><span>Touching up the surfaces</span></div>
+      <div class="ma-log-row" data-p="4"><span class="lchk"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg></span><span>Final walkthrough</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== STEP 3: CONFIRM ===== -->
+<div class="overlay" id="ovConfirm">
+  <div class="modal-confirm" role="dialog" aria-modal="true">
+    <div class="mc-hero">
+      <span class="eyebrow">Capture Complete · 3484 South Main St</span>
+      <h2>Kai analyzed the media and drafted a scope for your review.</h2>
+      <p>The field team captured this property in the Kai app. Kai analyzed the video and photos and pulled recommended tasks for you to review.</p>
+    </div>
+    <div class="mc-body">
+      <div class="mc-cap">Captured in the field</div>
+      <div class="stats">
+        <div class="stat">
+          <svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14"/><circle cx="12" cy="13" r="3.2"/><path d="M8 6l1.5-2h5L16 6"/></svg>
+          <div class="val">68</div>
+          <div class="lab">Photos</div>
+        </div>
+        <div class="stat">
+          <svg viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="12"/><path d="M16 10l6-3v10l-6-3"/></svg>
+          <div class="val">7:42</div>
+          <div class="lab">Video</div>
+        </div>
+      </div>
+      <div class="capby">Captured by Ada R. · yesterday 4:15 PM · Kai mobile</div>
+
+      <div class="callout">
+        <div class="check"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg></div>
+        <p><b>11 recommended tasks</b> across 4 rooms are ready for review. Each is backed by the photos that generated it — accept what's right, adjust what isn't.</p>
+      </div>
+
+      <button class="mc-cta" onclick="closeAll()">Review Scope →</button>
+      <div class="mc-note">This intake hands off into the review · same starting point for every concept</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const picker=document.getElementById('picker');
+const dz=document.getElementById('dz');
+const filerow=document.getElementById('filerow');
+const analyzeBtn=document.getElementById('analyzeBtn');
+let hasFile=false;
+
+function openUpload(){document.getElementById('ovUpload').classList.add('show');}
+function closeAll(){document.querySelectorAll('.overlay').forEach(o=>o.classList.remove('show'));resetUpload();}
+
+function fmtSize(b){const mb=b/1048576;return mb>1024?(mb/1024).toFixed(1)+' GB':mb.toFixed(0)+' MB';}
+
+function acceptFile(f){
+  if(!f) return;
+  hasFile=true;
+  document.getElementById('frName').textContent=f.name||'walkthrough.mp4';
+  filerow.classList.add('show');
+  document.getElementById('frSub').textContent='Uploading…';
+  analyzeBtn.disabled=true;
+  const bar=document.getElementById('frBar');
+  bar.style.width='0';
+  let p=0;
+  const t=setInterval(()=>{
+    p+=Math.random()*22;
+    if(p>=100){p=100;clearInterval(t);
+      document.getElementById('frSub').textContent=(f.size?fmtSize(f.size):'214 MB')+' · Ready';
+      analyzeBtn.disabled=false;
+    }
+    bar.style.width=p+'%';
+  },160);
+}
+
+picker.addEventListener('change',e=>acceptFile(e.target.files[0]));
+
+['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag');}));
+['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag');}));
+dz.addEventListener('drop',e=>acceptFile(e.dataTransfer.files[0]));
+
+function clearFile(e){e.stopPropagation();resetUpload();}
+function resetUpload(){
+  hasFile=false;filerow.classList.remove('show');analyzeBtn.disabled=true;
+  picker.value='';document.getElementById('frBar').style.width='0';
+}
+
+const PHASES=[
+  {title:'Walking the property',glyph:0,subs:['Reviewing footage frame by frame','Mapping room to room','Logging what the field team saw']},
+  {title:'Framing the rooms',glyph:1,subs:['Squaring up the layout','Setting the scaffolding','Blocking out each space']},
+  {title:'Checking the systems',glyph:2,subs:['Tracing plumbing and electrical','Testing the rough-ins','Flagging what needs attention']},
+  {title:'Touching up the surfaces',glyph:3,subs:['Patching drywall','Rolling on the paint','Sanding the edges']},
+  {title:'Final walkthrough',glyph:4,subs:['Pricing the line items','Punching the list','Handing off for your review']},
+];
+
+function runAnalyze(){
+  document.getElementById('ovUpload').classList.remove('show');
+  document.getElementById('ovAnalyze').classList.add('show');
+  startSequence();
+}
+
+function startSequence(){
+  const stageSvgs=document.querySelectorAll('#maStage svg');
+  const logRows=document.querySelectorAll('#maLog .ma-log-row');
+  const statusEl=document.getElementById('maStatus');
+  const subEl=document.getElementById('maSub');
+  const bar=document.getElementById('maBar');
+  const pctEl=document.getElementById('maPct');
+
+  // reset
+  logRows.forEach(r=>r.classList.remove('done','active'));
+  bar.style.width='0';pctEl.textContent='0%';
+
+  let phase=0, subIdx=0, pct=0;
+  // DEMO PACING — in production each phase runs ~45-70s. Compressed here.
+  const PHASE_MS=2600, SUB_MS=1300;
+
+  function setPhase(i){
+    const ph=PHASES[i];
+    statusEl.style.opacity=0;
+    setTimeout(()=>{statusEl.textContent=ph.title;statusEl.style.opacity=1;},180);
+    stageSvgs.forEach(s=>s.classList.toggle('on',+s.dataset.s===ph.glyph));
+    logRows.forEach((r,idx)=>{
+      r.classList.toggle('done',idx<i);
+      r.classList.toggle('active',idx===i);
+    });
+    subIdx=0;subEl.textContent=ph.subs[0];
+  }
+  setPhase(0);
+
+  const subTimer=setInterval(()=>{
+    const ph=PHASES[phase];
+    subIdx=(subIdx+1)%ph.subs.length;
+    subEl.style.opacity=0;
+    setTimeout(()=>{subEl.textContent=ph.subs[subIdx];subEl.style.opacity=1;},150);
+  },SUB_MS);
+
+  const phaseTimer=setInterval(()=>{
+    phase++;
+    if(phase>=PHASES.length){
+      clearInterval(phaseTimer);clearInterval(subTimer);clearInterval(pctTimer);
+      logRows.forEach(r=>{r.classList.add('done');r.classList.remove('active');});
+      bar.style.width='100%';pctEl.textContent='100%';
+      setTimeout(()=>{
+        document.getElementById('ovAnalyze').classList.remove('show');
+        document.getElementById('ovConfirm').classList.add('show');
+      },700);
+      return;
+    }
+    setPhase(phase);
+  },PHASE_MS);
+
+  const total=PHASE_MS*PHASES.length;
+  const pctTimer=setInterval(()=>{
+    pct=Math.min(99,pct+ (100/(total/200)) );
+    bar.style.width=pct+'%';pctEl.textContent=Math.round(pct)+'%';
+  },200);
+}
+</script>
+</body>
+</html>
