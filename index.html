@@ -611,11 +611,10 @@ body{flex-direction:column}
          doesn't pull focus. -->
     <button class="btn-ghost" id="appCancelCoBtn" onclick="triggerIframeCancelCo()" hidden>Cancel change order</button>
     <span class="btn-tooltip-wrap" id="appApproveWrap">
-      <!-- Who has the scope right now. The activity feed groups history by
-           turn, but "who is holding it" is present tense and belongs where
-           it can be seen without scrolling to the bottom of a page. Left of
-           the action, because handing off is what you do to it. -->
-      <span class="tb-holder" id="tbHolder"><span class="tb-holder-l">Held by</span><b id="tbHolderName">Tobi O.</b></span>
+      <!-- "Held by <name>" used to sit here, left of the action. Off for
+           now; renderHolder and syncHolder both null-check the element, so
+           putting the span back is all it takes. The .tb-holder rules are
+           still in the stylesheet. -->
       <button class="btn-primary" id="appApproveBtn" onclick="triggerIframeApprove()">Approve scope</button>
       <span class="btn-tooltip" id="appApproveTip" hidden>All tasks must be marked as Completed before you can submit the closeout.</span>
     </span>
@@ -6990,15 +6989,18 @@ body.scope-nav .sb-hdr.is-selscope .sb-hdr-title{color:var(--ink)}
 /* Every column flexes. The pane is resizable — the sidebar has a drag handle
    — so fixed pixel columns overflowed as soon as it got narrow. Each column
    states a floor and a share, in order:
-     task 70/1.55 · status 56/.86 · contractor 48/.86 · modifier 40/.66
-     product 60/1.24 · qty 26/.43 · rate 32/.56 · files 28/.45
-     amount 46/.8 · actions fixed 26
-   Floors total 432 + 72 of gaps, so the table holds down to ~504px.
+     task 70/1.55 · contractor 48/.86 · modifier 40/.66 · product 60/1.24
+     qty 26/.43 · rate 32/.56 · files 28/.45 · amount 46/.8
+   Eight tracks for eight cells. There were nine: status kept a column here
+   after it moved to the rail, so every cell from Contractor on sat one
+   track to the left of its own measure — Product squeezed into Modifier's
+   width, Qty given Product's — and the spare track left a band of empty
+   grid down the right-hand edge of every table.
    Written on one line deliberately: with the values split across lines and
    annotated inline, the whole declaration was being dropped and the rows fell
    back to the original four-column rule — which is what stacked Amount onto
    its own line under Files. */
-.pgd-tk-row,.pgd-tk-head{grid-template-columns:minmax(70px,1.55fr) minmax(56px,.86fr) minmax(48px,.86fr) minmax(40px,.66fr) minmax(60px,1.24fr) minmax(26px,.43fr) minmax(32px,.56fr) minmax(28px,.45fr) minmax(46px,.8fr);gap:8px}
+.pgd-tk-row,.pgd-tk-head{grid-template-columns:minmax(70px,1.55fr) minmax(48px,.86fr) minmax(40px,.66fr) minmax(60px,1.24fr) minmax(26px,.43fr) minmax(32px,.56fr) minmax(28px,.45fr) minmax(46px,.8fr);gap:8px}
 /* Nothing in a row may wrap: a two-line row breaks the scan down the column
    and the table's whole job is comparison. Every cell clips instead. */
 .pgd-tk-row,.pgd-tk-head{white-space:nowrap}
@@ -13680,6 +13682,7 @@ function selectScope(){
   if(typeof renderSidebar === 'function') renderSidebar();
   if(typeof renderWorkHdr === 'function') renderWorkHdr();
   if(typeof renderWork === 'function') renderWork();
+  if(typeof dwFollowSelection === 'function') dwFollowSelection();
 }
 /* The whole white bar is the click target, so its own controls — version
    chip, Edit toggle — have to opt out or they'd both fire. */
@@ -13750,6 +13753,7 @@ function selectGroup(key){
   if(typeof renderSidebar === 'function') renderSidebar();
   if(typeof renderWorkHdr === 'function') renderWorkHdr();
   if(typeof renderWork === 'function') renderWork();
+  if(typeof dwFollowSelection === 'function') dwFollowSelection();
 }
 
 /* ════════════ APPROVAL (task / group / whole) ════════════ */
@@ -14358,6 +14362,7 @@ function selectTask(id){
       if(wb) wb.scrollTop = 0;
     });
   }
+  if(typeof dwFollowSelection === 'function') dwFollowSelection();
 }
 function toggleOpen(id){
   let didOpen = false;
@@ -15598,7 +15603,9 @@ function openDrawer(id,tab){
      only restated the length of the list directly beneath it. */
   { const _s = document.getElementById('dwSub'); if(_s) _s.textContent = ''; }
   document.getElementById('drawer').classList.add('open');
-  document.getElementById('drawer-scrim').classList.add('open');
+  /* The scrim stays down. The drawer is a panel, not a modal: it reads the
+     notes at whatever level you are on, and it has to be possible to move
+     around the rail while it is open. Escape and the X still close it. */
   dwTab(dwActiveTab);
 }
 function openGroupDrawer(room,tab){
@@ -15624,13 +15631,50 @@ function openGroupDrawer(room,tab){
       `${_grpN} ${_grpN === 1 ? 'group' : 'groups'} · ${_tskN} ${_tskN === 1 ? 'task' : 'tasks'}`;
   }
   document.getElementById('drawer').classList.add('open');
-  document.getElementById('drawer-scrim').classList.add('open');
   dwTab(dwActiveTab);
+}
+/* ── The drawer follows the rail ──────────────────────────────────────
+   Notes are read against a level, and the level is whatever is selected —
+   so selecting a group while the drawer is open shows that group's notes
+   rather than leaving yesterday's task on screen or closing on you. An
+   unsaved note is written for the level it was started on, so drafts are
+   held per level and handed back when you return, never carried across.
+   They are dropped when the drawer closes, which is the point at which the
+   user has said they are done. */
+let DW_DRAFTS = {};
+function _dwCtxKey(c){
+  if(!c) return '';
+  return c.type === 'task' ? 't' + c.id
+       : c.type === 'room' ? 'g' + String(c.room)
+       : 's';
+}
+function dwIsOpen(){
+  const el = document.getElementById('drawer');
+  return !!el && el.classList.contains('open');
+}
+function dwFollowSelection(){
+  if(!dwIsOpen() || !dwCtx) return;
+  /* Where the rail now is, in the drawer's own terms. */
+  const next = (typeof scopeView !== 'undefined' && scopeView) ? {type:'scope'}
+             : (typeof selId !== 'undefined' && selId != null) ? {type:'task', id:selId}
+             : (typeof selGroupKey !== 'undefined' && selGroupKey) ? {type:'room', room:selGroupKey}
+             : null;
+  if(!next) return;
+  const from = _dwCtxKey(dwCtx), to = _dwCtxKey(next);
+  if(from === to) return;
+  if((dwNoteDraft || '').trim()) DW_DRAFTS[from] = dwNoteDraft; else delete DW_DRAFTS[from];
+  /* Set before the opener runs — it renders the composer on its way. */
+  dwNoteDraft = DW_DRAFTS[to] || '';
+  const tab = dwActiveTab;
+  if(next.type === 'scope') openScopeDrawer(tab);
+  else if(next.type === 'task') openDrawer(next.id, tab);
+  else openGroupDrawer(next.room, tab);
 }
 function closeDrawer(){
   document.getElementById('drawer').classList.remove('open');
   document.getElementById('drawer-scrim').classList.remove('open');
   dwCtx=null;
+  DW_DRAFTS = {};
   // Walking away from the composer walks away from the approval it was
   // going to carry — nothing is approved until the note is written.
   if(typeof apClearPendingApproval === 'function') apClearPendingApproval();
@@ -17372,7 +17416,7 @@ function _shopTaskActivityHtml(t){
   const all = taskActivityFeed(t).slice().reverse();
   if(!all.length) return `<div class="pgd-hdr-box sec-taskact">
       <div class="pgd-sec-hd"><div class="pgd-details-title">Task activity</div></div>
-      <div class="pgd-photos-empty">No activity yet for this task.</div>
+      <div class="pgd-photos-empty">No activity yet</div>
     </div>`;
 
   const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -22057,7 +22101,6 @@ function openScopeDrawer(tab){
   const _sub = document.getElementById('dwSub');
   if(_sub) _sub.textContent = '';
   document.getElementById('drawer').classList.add('open');
-  document.getElementById('drawer-scrim').classList.add('open');
   dwTab(dwActiveTab);
 }
 /* Activity across the whole project, rolled up by group. A scope entry that
@@ -22099,7 +22142,7 @@ function _pgdScopeActivityHtmlUnused(){
   if(!rows.length){
     return `<div class="pgd-details-sec sec-taskact">
       <div class="pgd-sec-hd"><div class="pgd-details-title">Scope activity</div></div>
-      <div class="pgd-photos-empty">No activity yet.</div>
+      <div class="pgd-photos-empty">No activity yet</div>
     </div>`;
   }
   const cap = 8;
@@ -22811,7 +22854,7 @@ function _pgdGroupActivityHtml(g){
   if(!rows.length){
     return `<div class="pgd-details-sec sec-taskact">
       <div class="pgd-sec-hd"><div class="pgd-details-title">Group activity</div></div>
-      <div class="pgd-photos-empty">No activity yet in this group.</div>
+      <div class="pgd-photos-empty">No activity yet</div>
     </div>`;
   }
   const cap = 8;
@@ -22928,8 +22971,9 @@ function _renderGroupPageHtml(opts){
   const taskRowsHtml = _pgdSortTasksForGroup(g.items)
     .map(t => _pgdTaskRowHtml(t, taskOnClick)).join('');
   // Activity below the tasks. The Activity tab has its own feed with the
-  // filter bar; this is the Editor's, merged and rolled up.
-  const groupActHtml = includeActivity ? '' : _pgdGroupActivityHtml(g);
+  // filter bar; this was the Editor's, merged and rolled up — off for now.
+  // _pgdGroupActivityHtml still builds it, so putting it back is one line.
+  const groupActHtml = '';
   // Activity feed — Activity tab only.
   let activitySectionHtml = '';
   let ctrlBarHtml = '';
@@ -22941,7 +22985,7 @@ function _renderGroupPageHtml(opts){
     ctrlBarHtml = actCtrlBarHtml(gFeed.length);
     activitySectionHtml = `<div class="pgd-details-sec">
       <div class="pgd-details-title">Group activity</div>
-      <div class="tlx">${activityCardsHtml || `<div class="pgd-muted" style="padding:16px 0">${actFilter==='all' ? 'No activity yet.' : `No “${esc(ACT_FILTER_LABEL(actFilter))}” activity in this group.`}</div>`}</div>
+      <div class="tlx">${activityCardsHtml || `<div class="pgd-muted" style="padding:16px 0">${actFilter==='all' ? 'No activity yet' : `No “${esc(ACT_FILTER_LABEL(actFilter))}” activity in this group.`}</div>`}</div>
     </div>`;
   }
   return `<div class="pgd">
@@ -23001,7 +23045,7 @@ function _renderGroupPageHtml(opts){
       <div class="pgd-details-title">Tasks in this ${groupBy === 'contractor' ? 'contractor' : 'group'}</div>
       <div class="pgd-tk-list">${taskRowsHtml
         ? _pgdTaskHeadHtml() + taskRowsHtml
-        : '<div class="pgd-tk-empty">No tasks in this group</div>'}</div>
+        : '<div class="pgd-tk-empty">No tasks yet</div>'}</div>
     </div>
     ${activitySectionHtml}
     ${groupActHtml}
@@ -23274,7 +23318,7 @@ function renderProgress(){
     })() : ''}
     <div class="pgd-details-sec">
       <div class="pgd-details-title">Task activity</div>
-      <div class="tlx">${activityCards || `<div class="pgd-muted" style="padding:16px 0">${(actFilter==='all' && !actSearch) ? 'No activity yet.' : 'No activity matches the current filter.'}</div>`}</div>
+      <div class="tlx">${activityCards || `<div class="pgd-muted" style="padding:16px 0">${(actFilter==='all' && !actSearch) ? 'No activity yet' : 'No activity matches the current filter.'}</div>`}</div>
     </div>
   </div>`;
 }
