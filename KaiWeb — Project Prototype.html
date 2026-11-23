@@ -2507,6 +2507,14 @@ body.viewing-archived .grp-addupdate,body.viewing-archived .task-addupdate{displ
 .sb-new-group{display:flex;align-items:center;justify-content:center;gap:8px;margin:16px;padding:14px;width:calc(100% - 32px);border:1.5px dashed var(--stroke);background:transparent;color:var(--midtone);font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;transition:color .12s,border-color .12s,background .12s}
 .sb-new-group svg{width:13px;height:13px}
 .sb-new-group:hover{color:var(--ink);border-color:var(--midtone);background:var(--sunken,#F4F0E6)}
+/* Naming happens where the group will be, not in a dialog over the top of
+   it: the dashed row becomes the field, same box, same dashes. */
+.sb-new-group.is-editing{padding:0;border-style:dashed;border-color:var(--ink);
+  background:var(--white);cursor:text}
+.sb-new-group.is-editing input{width:100%;padding:13px 14px;border:0;outline:0;background:transparent;
+  font-family:var(--body);font-size:13px;font-weight:500;color:var(--ink);text-align:center}
+.sb-new-group.is-editing input::placeholder{font-family:var(--mono);font-size:10px;font-weight:700;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--t3)}
 /* + New task button at the TOP of each group body (draft mode only) — same
    dashed language as .sb-new-group so the two add-affordances read as one
    pattern. Slimmer padding since it sits inside a group. */
@@ -2667,10 +2675,15 @@ body.co-mode .grp-approve{display:none}
 /* 34px, not 24. The dots button is 22px sitting 16px from the edge, so a
    24px slide left a 2px gap — the Review button and the dots read as one
    control stuck together. 34 clears the button with room to spare. */
-body.sb-rowmenus .grp-hdr:hover .grp-right,
+/* With the gear on the dots are on every row, not waiting for a hover —
+   so the gutter has to be open on every row too. It was still tied to
+   :hover, which left the amount sitting on top of the handle on all the
+   rows the pointer was not over: at Step 1, seven $0.00 printed through
+   seven sets of dots. The shift belongs to the same switch the dots do. */
+body.sb-rowmenus .grp-right,
+body.sb-rowmenus .task-right,
 .grp-hdr:has(.sb-dots-wrap.is-open) .grp-right,
 .grp-hdr:has(.sb-dots:focus-visible) .grp-right,
-body.sb-rowmenus .task-row:hover .task-right,
 .task-row:has(.sb-dots-wrap.is-open) .task-right,
 .task-row:has(.sb-dots:focus-visible) .task-right{transform:translateX(-34px)}
 /* The slide is deliberate everywhere else — it's what draws the eye to a
@@ -5434,6 +5447,27 @@ body.wk-open .pgd-mediasec.is-sticky{z-index:60}
    page has to reflow off its own box, not the window's. */
 .ov{padding:22px 28px 60px;display:flex;flex-direction:column;gap:14px;
   container:ov / inline-size}
+/* A card like the others on this page, not a bar of its own: it reports
+   which document you are in, which is the same kind of fact as everything
+   below it. The one action it carries is ink, because the ground is
+   light. */
+.ov-outdated{display:flex;align-items:center;gap:18px;padding:16px 18px;
+  background:var(--white);border:1px solid var(--stroke);color:var(--t2);
+  font-family:var(--body);font-size:13px;line-height:1.45}
+.ov-outdated-b{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px}
+.ov-outdated-b b{font-weight:700;color:var(--ink)}
+.ov-outdated-b i{font-style:normal;color:var(--t2)}
+.ov-outdated-btn{flex:none;height:36px;padding:0 16px;background:var(--ink);
+  border:1px solid var(--ink);color:var(--white);font-family:var(--mono);font-size:9px;
+  font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;
+  transition:background .12s,border-color .12s,color .12s}
+.ov-outdated-btn:hover{background:var(--white);color:var(--ink)}
+.ov-outdated-btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+@container ov (max-width:620px){
+  .ov-outdated{flex-wrap:wrap;gap:12px}
+  .ov-outdated-b{flex:1 1 100%}
+  .ov-outdated-btn{margin-left:auto}
+}
 /* Section heads on Overview read exactly as they do on Documents: the
    two tabs are one page split in half, and a different title treatment on
    each would say they were unrelated. */
@@ -18232,7 +18266,8 @@ if(IS_DRAFT_STAGE && !IS_EMPTY_SEED){
    Outstanding rework and missing-detail flags are cleared with it: a
    task can't be both complete and awaiting a fix, and either one would
    outrank 'complete' in the status ladder. */
-if(PROJ_MODE === 'closeout' || PROJ_MODE === 'closeout-approved'){
+function _seedCloseoutComplete(){
+  if(PROJ_MODE !== 'closeout' && PROJ_MODE !== 'closeout-approved') return;
   TASKS.forEach(t => {
     t.status = 'complete';
     t.editRequested = false;
@@ -18241,6 +18276,7 @@ if(PROJ_MODE === 'closeout' || PROJ_MODE === 'closeout-approved'){
     t.flags = [];
   });
 }
+_seedCloseoutComplete();
 /* Labour track — the scope has just gone live. Every task was approved to get
    here and none of it has been touched, so nothing is in progress, nothing
    needs rework, and nothing is flagged. Step 6 keeps the mixed statuses and
@@ -18325,6 +18361,18 @@ document.addEventListener('DOMContentLoaded', ()=>{
     if(typeof renderAll === 'function') renderAll();
   }
   if(typeof _seedCatalogDrift === 'function') _seedCatalogDrift();
+  /* Last word on status. The closeout pass runs while the module loads,
+     but several tasks are seeded after that — the measurement task among
+     them — and they arrived carrying the status they were written with.
+     At Step 10 that put one Kitchen task on a finished job reading as
+     unfinished. Finishing the job is a fact about every task in it, so
+     the pass runs again once there is nothing left to seed. */
+  if(typeof _seedCloseoutComplete === 'function'){
+    const _before = TASKS.map(t => t.status).join('|');
+    _seedCloseoutComplete();
+    if(TASKS.map(t => t.status).join('|') !== _before
+       && typeof renderAll === 'function') renderAll();
+  }
   // Initial paint of the sidebar state bar (mode + copy + primary CTA).
   if(typeof renderStateBar === 'function') renderStateBar();
 });
@@ -19323,6 +19371,12 @@ function applyArchivedState(){
   // Re-render the artifact if it's the active tab so the version swap is
   // visible immediately; sidebar re-render is intentionally skipped.
   if(workMode === 'artifact' && typeof renderArtifact === 'function') renderArtifact();
+  /* Which version is being read is stated on Overview now that the button
+     moved there, so Overview has to hear about the switch — otherwise the
+     notice appeared only when something else happened to repaint, and
+     Return to current left its own notice standing. */
+  if((workMode === 'overview' || splitMode === 'overview')
+     && typeof renderWork === 'function') renderWork();
   if(typeof renderStateBar === 'function') renderStateBar();
 }
 /* ── STATE BAR (in the sidebar) ─────────────────────────────────────────
@@ -19423,8 +19477,8 @@ function renderStateBar(){
   const settingsIcon = `<div class="sb-more" id="sbMore">
     <button class="sb-more-btn${SB_ROWMENUS ? ' is-on' : ''}" onclick="event.stopPropagation();sbRowMenusToggle()"
       aria-pressed="${SB_ROWMENUS}"
-      title="${SB_ROWMENUS ? 'Hide row menus' : 'Show row menus on every task and group'}"
-      aria-label="Row menus">
+      title="${SB_ROWMENUS ? 'Done editing groups' : 'Edit groups — add, duplicate and delete'}"
+      aria-label="Edit groups">
       <!-- A gear. The old mark was a circle with eight rays, which at 16px
            is a sun — it read as brightness, not settings. -->
       <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.3"/><path d="M12.8 9.5a1.1 1.1 0 00.22 1.21l.04.04a1.33 1.33 0 11-1.89 1.89l-.04-.04a1.1 1.1 0 00-1.21-.22 1.1 1.1 0 00-.67 1v.11a1.33 1.33 0 11-2.66 0v-.06a1.1 1.1 0 00-.72-1 1.1 1.1 0 00-1.21.22l-.04.04A1.33 1.33 0 112.73 10.8l.04-.04a1.1 1.1 0 00.22-1.21 1.1 1.1 0 00-1-.67h-.11a1.33 1.33 0 110-2.66h.06a1.1 1.1 0 001-.72 1.1 1.1 0 00-.22-1.21l-.04-.04A1.33 1.33 0 115.2 2.73l.04.04a1.1 1.1 0 001.21.22h.05a1.1 1.1 0 00.67-1v-.11a1.33 1.33 0 112.66 0v.06a1.1 1.1 0 00.67 1 1.1 1.1 0 001.21-.22l.04-.04a1.33 1.33 0 111.89 1.89l-.04.04a1.1 1.1 0 00-.22 1.21v.05a1.1 1.1 0 001 .67h.11a1.33 1.33 0 110 2.66h-.06a1.1 1.1 0 00-1 .67z"/></svg>
@@ -19473,13 +19527,14 @@ function renderStateBar(){
   if(typeof refreshAttnNote === 'function') setTimeout(refreshAttnNote, 0);
   // The sidebar is always view-only in this variant, so we no longer
   // surface an "Editing" / "View only" chip or the yellow draft-state
-  // background. The only surviving state-bar action is the "Return to
-  // current" affordance when the user is viewing an outdated version;
-  // everything else is just the Room/Contractor toggle + filter icon.
-  let actions = '';
-  if(currentVersionId !== 'v3'){
-    actions = `<button class="sb-state-bar-btn" onclick="switchVersion('v3')">Return to current</button>`;
-  }
+  // background — the strip is the Room/Contractor toggle, the filter and
+  // the search, and nothing else.
+  /* "Return to current" used to sit here. Which version you are reading
+     is a fact about the job, not about the navigator, and a button that
+     changes the whole screen had no business in a strip whose other
+     controls only filter the list beneath it. It is on Overview now,
+     beside the statement of what you are looking at. */
+  const actions = '';
   // Gear sits at the far right, aligned with the per-group duplicate icon
   // column it toggles (those sit flush with the sidebar's right edge too).
   bar.innerHTML = `${groupBySeg}${filterIcon}${searchBtn}<span class="sb-state-bar-sp"></span>${settingsIcon}${actions}`;
@@ -20384,6 +20439,25 @@ function taskRow(t){
     </div>
   </div>`;
 }
+/* The dashed row at the foot of the rail, and the field it becomes. Same
+   language as "New task" inside a group, so the two add-affordances read
+   as one system — one makes a place, the other makes work in it. */
+function _sbNewGroupHtml(){
+  if(typeof SB_ROWMENUS === 'undefined' || !SB_ROWMENUS) return '';
+  if(typeof sbCanEditGroups === 'function' && !sbCanEditGroups()) return '';
+  if(typeof SB_NEWGRP !== 'undefined' && SB_NEWGRP){
+    return `<div class="sb-new-group is-editing" onclick="event.stopPropagation()">
+      <input type="text" id="sbNewGrpIn" placeholder="Group name" aria-label="New group name"
+        onkeydown="sbNewGroupKey(event)" onblur="sbNewGroupSave(this.value)">
+    </div>`;
+  }
+  return `<button type="button" class="sb-new-group" onclick="event.stopPropagation();sbNewGroupStart()"
+      title="Add a group to the scope">
+    <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"
+      stroke-linecap="round"><path d="M7 3v8M3 7h8"/></svg>
+    <span>New group</span>
+  </button>`;
+}
 function renderSidebar(){
   // The white Scope bar is the scope-level nav target. Availability is
   // a body class (so CSS can drop the affordance entirely at the Edit
@@ -20416,10 +20490,15 @@ function renderSidebar(){
     // an add-your-first-group CTA) from "you filtered everything out"
     // (offer a clear-filters CTA instead).
     if(TASKS.length === 0){
-      scroll.innerHTML = `<div class="ph" style="height:auto;padding:40px 20px;text-align:center">
+      /* Every group can be deleted now, so this state is reachable with
+         nothing left on the board. It has to carry the way back in. */
+      const _back = (typeof SB_ROWMENUS !== 'undefined' && SB_ROWMENUS)
+        ? 'Add a group to get started, then add tasks to it.'
+        : 'Open the gear above to add a group, then add tasks to it.';
+      scroll.innerHTML = `<div class="ph" style="height:auto;padding:40px 20px 8px;text-align:center">
         <div class="ph-title" style="font-size:15px;margin-bottom:6px">Empty scope</div>
-        <div class="ph-desc" style="margin-bottom:16px">Duplicate an existing group to get started, then add tasks to it.</div>
-      </div>`;
+        <div class="ph-desc">${_back}</div>
+      </div>` + _sbNewGroupHtml();
     } else {
       scroll.innerHTML=`<div class="ph" style="height:200px"><div class="ph-title" style="font-size:15px">No tasks match</div><div class="ph-desc">Clear the filter to see the full scope.</div></div>`;
     }
@@ -20497,7 +20576,7 @@ function renderSidebar(){
         ${g.items.map(taskRow).join('')}
       </div>
     </div>`;
-  }).join('');
+  }).join('') + _sbNewGroupHtml();
 }
 // Placeholder handlers for the draft-mode add affordances. They toast for now
 // and can be wired to real task/group creation UIs when we build that flow out.
@@ -25015,13 +25094,88 @@ function deleteTask(id){
   toast(`${t.name} deleted`);
   renderAll();
 }
+/* ── Adding and removing groups ──────────────────────────────────────
+   A scope being drafted is a list of places, and the list the job starts
+   from is a guess: a room the walk never reached, a garage that is not
+   part of the job, a second kitchenette nobody listed. So the rail has
+   to be able to gain and lose a group, not only the tasks inside one.
+
+   Both live behind the gear, which is what puts the rail into an editing
+   posture: handles on every row, and the dashed row at the foot. With it
+   off the rail is a place to find your way around, and nothing on it can
+   be destroyed by a stray click. */
+let SB_NEWGRP = false;
+function sbCanEditGroups(){
+  return (typeof groupBy === 'undefined' || groupBy === 'room')
+    && (typeof PROJ_MODE === 'undefined' || PROJ_MODE === 'draft');
+}
+function sbNewGroupStart(){
+  SB_NEWGRP = true;
+  if(typeof renderSidebar === 'function') renderSidebar();
+  requestAnimationFrame(() => {
+    const el = document.getElementById('sbNewGrpIn');
+    if(el){ el.focus(); el.select(); }
+  });
+}
+function sbNewGroupCancel(){
+  if(!SB_NEWGRP) return;
+  SB_NEWGRP = false;
+  if(typeof renderSidebar === 'function') renderSidebar();
+}
+function sbNewGroupKey(e){
+  if(e.key === 'Enter'){ e.preventDefault(); sbNewGroupSave(e.target.value); }
+  else if(e.key === 'Escape'){ e.preventDefault(); sbNewGroupCancel(); }
+}
+function sbNewGroupSave(raw){
+  const name = String(raw == null ? '' : raw).trim().replace(/\s+/g, ' ');
+  if(!name){ sbNewGroupCancel(); return; }
+  if(typeof ROOMS !== 'undefined'
+     && ROOMS.some(r => String(r).toLowerCase() === name.toLowerCase())){
+    if(typeof toast === 'function') toast(`There is already a ${name} group`);
+    return;
+  }
+  ROOMS.push(name);
+  SB_NEWGRP = false;
+  /* Added closed, and nothing else on the rail moves. Opening it threw
+     away whatever the rail was showing — the group being worked in shut,
+     a task list replaced by an empty one — to make room for a group with
+     nothing in it yet. Making a place and going to it are two decisions,
+     and the second one is the reader's. */
+  if(typeof collapsedGrps !== 'undefined' && collapsedGrps) collapsedGrps.add(name);
+  if(typeof toast === 'function') toast(`${name} added`);
+  renderAll();
+  /* A long rail puts the new row below the fold. Only as far as it has to
+     go: already on screen and nothing moves, which is the usual case,
+     since the dashed row you just used sits right under it. */
+  requestAnimationFrame(() => {
+    const row = document.querySelector('.grp[data-grp="' + (typeof _esc1 === 'function'
+      ? _esc1(name) : name.replace(/"/g, '\\"')) + '"]');
+    if(row && row.scrollIntoView) row.scrollIntoView({block:'nearest'});
+  });
+}
 function deleteGroup(key){
   const groups=groupTasks(TASKS);
   const g=groups.find(x=>x.key===key); if(!g) return;
-  if(!confirm(`Delete the ${g.name} group? ${g.items.length} ${g.items.length===1?'task':'tasks'} will be removed.`)) return;
+  /* An empty group takes nothing with it, and saying "0 tasks will be
+     removed" made deleting one sound like it had a cost it does not. */
+  const q = g.items.length
+    ? `Delete the ${g.name} group? ${g.items.length} ${g.items.length===1?'task':'tasks'} will be removed.`
+    : `Delete the ${g.name} group?`;
+  if(!confirm(q)) return;
   const ids=new Set(g.items.map(t=>t.id));
   for(let i=TASKS.length-1;i>=0;i--){ if(ids.has(TASKS[i].id)) TASKS.splice(i,1); }
   ids.forEach(id=>{ approved.delete(id); openIds.delete(id); if(selId===id) selId=null; });
+  /* The group is the room, so the room goes too. Deleting its tasks alone
+     left an empty group standing at draft — where every room shows whether
+     or not it holds anything — and the row came straight back. */
+  if(typeof groupBy === 'undefined' || groupBy === 'room'){
+    if(typeof ROOMS !== 'undefined'){
+      const i = ROOMS.indexOf(key);
+      if(i !== -1) ROOMS.splice(i, 1);
+    }
+    if(typeof selGroupKey !== 'undefined' && selGroupKey === key) selGroupKey = null;
+    if(typeof collapsedGrps !== 'undefined' && collapsedGrps) collapsedGrps.delete(key);
+  }
   toast(`${g.name} deleted`);
   renderAll();
 }
@@ -28656,6 +28810,42 @@ function _ovWhoHtml(name){
   return `<span class="ov-who-n"><b>${esc(name)}</b>${
     r ? `<i>${esc(r)}</i>` : ''}</span>`;
 }
+/* ── Reading an outdated scope ───────────────────────────────────────
+   Which version is on screen is a fact about the job, so Overview is
+   where it is stated — above the property, because it qualifies
+   everything under it, and carrying the way back to the live document.
+   It says nothing at all while you are on the current scope. */
+function _ovOutdatedHtml(){
+  if(typeof currentVersionId === 'undefined' || currentVersionId === 'v3') return '';
+  const v = (typeof VERSIONS !== 'undefined')
+    ? VERSIONS.find(x => x.id === currentVersionId) : null;
+  if(!v) return '';
+  const lbl = (typeof versionLabel === 'function') ? versionLabel(v) : ('Scope V' + (v.num || 1));
+  /* Two things wear this band and they are not the same fact. A closed
+     job is finished — the way out of it is to open it again. An older
+     scope is simply not the one the job runs on, and the way out is to
+     go back to the one that does. */
+  const closed = v.kind === 'closeout';
+  /* The state first, in one short sentence you cannot miss, and the
+     detail under it. One sentence carrying both made the fact that the
+     job is closed something you had to read to the end of. */
+  const lead = closed ? 'This job is closed.' : `You are reading ${lbl}.`;
+  const rest = closed
+    ? `The closeout was approved on ${esc(v.at || '')}. All data is read-only.`
+    : `Approved ${esc(v.at || '')}. The job runs on the current scope \u2014 all data is read-only.`;
+  return `<div class="ov-outdated">
+    <span class="ov-outdated-b"><b>${esc(lead)}</b><i>${rest}</i></span>
+    <button type="button" class="ov-outdated-btn" onclick="${
+      closed ? 'reactivateJob()' : "switchVersion('v3')"}"
+      >${closed ? 'Reactivate job' : 'Return to current'}</button>
+  </div>`;
+}
+/* Reopening a closed job puts you back on the live scope — the closeout
+   stays where it is, as the record of what the job was when it closed. */
+function reactivateJob(){
+  if(typeof switchVersion === 'function') switchVersion('v3');
+  if(typeof toast === 'function') toast('Job reactivated \u00b7 back on the current scope');
+}
 function _ovIdentityHtml(P){
   const st = _ovProjStatus();
   /* Beds, baths and square feet travel together — they are how a
@@ -29380,6 +29570,7 @@ function renderOverview(){
      thing anyone opening this tab needs is confirmation they are on the
      right property, before any money. */
   body.innerHTML = `<div class="ov">
+    ${_ovOutdatedHtml()}
     ${_ovIdentityHtml(P)}
     ${_ovHasRecord() ? _renderRegisterSection({slim:true}) : ''}
 
@@ -45079,13 +45270,16 @@ function _renderCopyPaper(copy){
             ${/* A change order's page names the change order, full stop.
                   Leading with "Scope of work" put the wrong noun first on
                   the one document that is not one. */ ''}
+            ${/* The closeout is not a scope of work. It is the record of
+                  the job as finished, and it says so — the id stays, since
+                  it is the same job and people quote that number. */ ''}
             <div class="art-eyebrow">${_CO_DOC
               /* No SOW number here. That id belongs to the scope, and on a
                  change order it read as this document's own — naming the
                  thing being changed where the name of the document goes.
                  The change order's number is its name. */
               ? `Change order ${ver.num - 1}`
-              : `Scope of work &middot; <span class="art-eye-id">${
+              : `${ver && ver.kind === 'closeout' ? 'Close out' : 'Scope of work'} &middot; <span class="art-eye-id">${
                   esc(_sowIdFor(copy._isHistorical ? copy.basedOnVersionId : (copy.shareToken || copy.id)))}</span>${
                   _coPending ? ` &middot; <span class="art-eye-co">Change order ${ver.num - 1} pending</span>` : ''}`}</div>
           </div>
